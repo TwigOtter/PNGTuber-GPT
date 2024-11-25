@@ -9,100 +9,13 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Security.Cryptography;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public class CPHInline
 {
     public Queue<chatMessage> GPTLog { get; set; } = new Queue<chatMessage>(); // Store previous prompts and responses in a queue
     public Queue<chatMessage> ChatLog { get; set; } = new Queue<chatMessage>(); // Store the chat log in a queue
-
-    /// <summary>
-    /// Represents application settings used to configure various aspects of the application.
-    /// </summary>
-    public class AppSettings
-    {
-        /// <summary>
-        /// Gets or sets the API key used for OpenAI services.
-        /// </summary>
-        public string OpenApiKey { get; set; }
-        /// <summary>
-        /// Gets or sets the model used by OpenAI for generating responses.
-        /// </summary>
-        public string OpenAiModel { get; set; }
-        /// <summary>
-        /// Gets or sets the path where the database is stored.
-        /// </summary>
-        public string DatabasePath { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether the application should ignore bot usernames.
-        /// </summary>
-        public string IgnoreBotUsernames { get; set; }
-        /// <summary>
-        /// Gets or sets an alias or identifier for a voice.
-        /// </summary>
-        public string VoiceAlias { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether emojis should be stripped from generated responses.
-        /// </summary>
-        public string StripEmojisFromResponse { get; set; }
-        /// <summary>
-        /// Gets or sets the level of logging used by the application.
-        /// </summary>
-        public string LoggingLevel { get; set; }
-        /// <summary>
-        /// Gets or sets the version of the application.
-        /// </summary>
-        public string Version { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether hate content is allowed.
-        /// </summary>
-        public string HateAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether threatening hate content is allowed.
-        /// </summary>
-        public string HateThreateningAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether self-harm content is allowed.
-        /// </summary>
-        public string SelfHarmAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether violent content is allowed.
-        /// </summary>
-        public string ViolenceAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether content related to self-harm intent is allowed.
-        /// </summary>
-        public string SelfHarmIntentAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether content containing self-harm instructions is allowed.
-        /// </summary>
-        public string SelfHarmInstructionsAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether harassment content is allowed.
-        /// </summary>
-        public string HarassmentAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether threatening harassment content is allowed.
-        /// </summary>
-        public string HarassmentThreateningAllowed { get; set; }
-        /// <summary>
-        /// Gets or sets a value indicating whether GPT questions should be logged to Discord.
-        /// </summary>
-        public string LogGptQuestionsToDiscord { get; set; }
-        /// <summary>
-        /// Gets or sets the URL of the Discord webhook.
-        /// </summary>
-        public string DiscordWebhookUrl { get; set; }
-        /// <summary>
-        /// Gets or sets the username of the Discord bot.
-        /// </summary>
-        public string DiscordBotUsername { get; set; }
-        /// <summary>
-        /// Gets or sets the URL of the Discord bot's avatar.
-        /// </summary>
-        public string DiscordAvatarUrl { get; set; }
-    }
 
     /// <summary>
     /// Represents the response structure for ChatGPT completions API.
@@ -441,9 +354,9 @@ public class CPHInline
         }
 
         // Log the sending of the version number to the chat for debugging purposes.
-        LogToFile($"Sending version number to chat: {initializeVersionNumber}", "DEBUG");
+        LogToFile($"Logging version number: {initializeVersionNumber}", "DEBUG");
         // Send the version number to the chat.
-        CPH.SendMessage($"{initializeVersionNumber} has been initialized successfully.", true);
+        CPH.SendMessage($"Hey Twig, I'm ready for our next adventure! What's the plan?", true);
         // Log the result of sending the version number.
         LogToFile("Version number sent to chat successfully.", "INFO");
         // Return true to indicate the version number has been sent successfully.
@@ -457,9 +370,9 @@ public class CPHInline
     /// it creates a default file.
     /// </summary>
     /// <returns>True if the nickname with pronouns is successfully retrieved and set; otherwise, false.</returns>
-    public bool GetNicknamewPronouns()
+    public bool GetNicknamePronouns()
     {
-        LogToFile("Entering GetNicknamewPronouns method.", "DEBUG");
+        LogToFile("Entering GetNicknamePronouns method.", "DEBUG");
         string userName = args["userName"].ToString();
         LogToFile($"Retrieved 'userName': {userName}", "DEBUG");
         if (string.IsNullOrWhiteSpace(userName))
@@ -524,7 +437,7 @@ public class CPHInline
         catch (Exception ex)
         {
             // Log any exceptions that occur during the method execution
-            LogToFile($"An error occurred in GetNicknamewPronouns: {ex.Message}", "ERROR");
+            LogToFile($"An error occurred in GetNicknamePronouns: {ex.Message}", "ERROR");
             return false;
         }
     }
@@ -937,7 +850,9 @@ public class CPHInline
         LogToFile("Entering SetPreferredUsername method.", "DEBUG");
         // Retrieve the necessary parameters from the args dictionary.
         string userName = args["userName"]?.ToString();
-        string pronouns = args["Pronouns"]?.ToString();
+        LogToFile("Retrieved username is: " + userName, "DEBUG");
+        string pronouns = args["Pronouns"] ? args["Pronouns"].ToString() : "";
+        LogToFile("Retrieved pronouns are: " + pronouns, "DEBUG");
         string preferredUserNameInput = args["rawInput"]?.ToString();
         string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
         // Log the retrieved parameters for debugging purposes.
@@ -1332,6 +1247,7 @@ public class CPHInline
             "harassment_allowed",
             "harassment_threatening_allowed",
             "sexual_allowed",
+            "sexual_minors_allowed",
             "violence_allowed",
             "violence_graphic_allowed"
         };
@@ -1339,7 +1255,15 @@ public class CPHInline
         var preferences = new Dictionary<string, bool>();
         foreach (var key in preferenceKeys)
         {
-            bool value = CPH.GetGlobalVar<bool>(key, true);
+            bool value;
+            try
+            {
+                value = CPH.GetGlobalVar<bool>(key, true); // Do not throw an exception if not found
+            }
+            catch
+            {
+                value = true; // Set default value to true if the variable is not found
+            }
             preferences.Add(key, value);
             LogToFile($"Loaded moderation preference: {key} is set to {value}.", "DEBUG");
         }
@@ -1703,21 +1627,10 @@ public class CPHInline
     /// Sends a user's message to the GPT model and handles the response, including storing context and speaking the response aloud.
     /// </summary>
     /// <returns>True if the GPT model provides a response, otherwise false.</returns>
-    public bool AskGPT()
+    public bool AskGPT_Assistant()
     {
-        LogToFile("Entering AskGPT method.", "DEBUG");
+        LogToFile("Entering AskGPT Assistant method.", "DEBUG");
         // Check if the ChatLog has been initialized and log the chat history if it exists.
-        if (ChatLog == null)
-        {
-            ChatLog = new Queue<chatMessage>();
-            LogToFile("ChatLog queue has been initialized for the first time.", "INFO");
-        }
-        else
-        {
-            // Using LINQ to concatenate the message contents, separated by newlines.
-            string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
-            LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
-        }
 
         // Retrieve and validate the voice alias global variable.
         string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
@@ -1777,7 +1690,6 @@ public class CPHInline
         }
 
         // Construct the paths to the context and keyword context files and ensure they exist.
-        string ContextFilePath = Path.Combine(databasePath, "context.txt");
         string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
         LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
         // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
@@ -1795,25 +1707,27 @@ public class CPHInline
         }
 
         // Load additional context from files and global variables.
-        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
+        string context = "";
         string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
         string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
         string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
-        string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+        string contextBody = $"We are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
         LogToFile("Assembled context body for GPT prompt.", "DEBUG");
         // Formulate the prompt for GPT.
         string prompt = $"{userToSpeak} asks: {fullMessage}";
         LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
         // Check for mentions of keywords within the prompt and add relevant context.
-        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
-        if (keywordMatch)
+        var matchingKeywords = keywordContexts.Keys.Where(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+        if (matchingKeywords.Any())
         {
-            // If a keyword is mentioned, append its context to the body.
-            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
-            string keywordPhrase = $"Something you know about {keyword} is:";
-            string keywordValue = keywordContexts[keyword];
-            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
-            LogToFile("Added keyword-specific context to context body.", "DEBUG");
+            foreach (var keyword in matchingKeywords)
+            {
+                // Append each keyword's context to the body.
+                string keywordPhrase = $"Something you know about {keyword} is:";
+                string keywordValue = keywordContexts[keyword];
+                contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+                LogToFile($"Added keyword-specific context for '{keyword}' to context body.", "DEBUG");
+            }
         }
 
         // Check for user-specific context and append it as well.
@@ -1828,7 +1742,7 @@ public class CPHInline
         try
         {
             // Call the GPT model with the prompt and the context.
-            string GPTResponse = GenerateChatCompletion(prompt, contextBody); // Placeholder for the actual GPT call.
+            string GPTResponse = GenerateChatCompletion_Assistant(prompt, contextBody); // Placeholder for the actual GPT call.
             if (string.IsNullOrWhiteSpace(GPTResponse))
             {
                 LogToFile("GPT model did not return a response.", "ERROR");
@@ -1839,7 +1753,7 @@ public class CPHInline
             LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
             // Speak the GPT response.
             CPH.TtsSpeak(voiceAlias, GPTResponse, false);
-            LogToFile("Spoke GPT's response.", "INFO");
+            LogToFile("Spoke GPT's response.", "DEBUG");
             // Send the response in chunks to the chat if it's longer than a certain length.
             if (GPTResponse.Length > 500)
             {
@@ -1878,7 +1792,189 @@ public class CPHInline
             else
             {
                 CPH.SendMessage(GPTResponse, true);
-                LogToFile("Sent GPT response to chat.", "INFO");
+                LogToFile("Sent GPT response to chat.", "DEBUG");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
+            return false;
+        }
+    }
+
+
+    /// <summary>
+    /// Sends a user's message to the GPT model and handles the response, including storing context and speaking the response aloud.
+    /// </summary>
+    /// <returns>True if the GPT model provides a response, otherwise false.</returns>
+    public bool AskGPTNoSpeech_Assistant()
+    {
+        LogToFile("Entering AskGPT Assistant method.", "DEBUG");
+        // Check if the ChatLog has been initialized and log the chat history if it exists.
+
+        // Retrieve and validate the voice alias global variable.
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
+        // Retrieve and validate the user name argument.
+        string userName;
+        if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
+        {
+            LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        userName = userNameObj.ToString();
+        LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
+        // Determine the nickname or username to speak.
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
+        if (string.IsNullOrWhiteSpace(userToSpeak))
+        {
+            LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Retrieve and validate the database path global variable.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path");
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
+        // Retrieve the full message to process, either the moderated message or the raw input.
+        string fullMessage;
+        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        {
+            fullMessage = moderatedMessageObj.ToString();
+        }
+        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
+        {
+            fullMessage = rawInputObj.ToString();
+        }
+        else
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Construct the paths to the context and keyword context files and ensure they exist.
+        string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
+        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
+        Dictionary<string, string> keywordContexts;
+        if (File.Exists(keywordContextFilePath))
+        {
+            string jsonContent = File.ReadAllText(keywordContextFilePath);
+            keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            LogToFile("Loaded existing keyword contexts from file.", "DEBUG");
+        }
+        else
+        {
+            keywordContexts = new Dictionary<string, string>();
+            LogToFile("Initialized new dictionary for keyword contexts.", "DEBUG");
+        }
+
+        // Load additional context from files and global variables.
+        string context = "";
+        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+        string contextBody = $"We are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+        LogToFile("Assembled context body for GPT prompt.", "DEBUG");
+        // Formulate the prompt for GPT.
+        string prompt = $"{userToSpeak} asks: {fullMessage}";
+        LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
+        // Check for mentions of keywords within the prompt and add relevant context.
+        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        if (keywordMatch)
+        {
+            // If a keyword is mentioned, append its context to the body.
+            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+            string keywordPhrase = $"Something you know about {keyword} is:";
+            string keywordValue = keywordContexts[keyword];
+            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+            LogToFile("Added keyword-specific context to context body.", "DEBUG");
+        }
+
+        // Check for user-specific context and append it as well.
+        if (keywordContexts.ContainsKey(userName))
+        {
+            string usernamePhrase = $"Something you know about {userToSpeak} is:";
+            string usernameValue = keywordContexts[userName];
+            contextBody += $"\n{usernamePhrase} {usernameValue}\n";
+            LogToFile("Added user-specific context to context body.", "DEBUG");
+        }
+
+        try
+        {
+            // Call the GPT model with the prompt and the context.
+            string GPTResponse = GenerateChatCompletion_Assistant(prompt, contextBody); // Placeholder for the actual GPT call.
+            if (string.IsNullOrWhiteSpace(GPTResponse))
+            {
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+                return false;
+            }
+
+            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            // DO NOT Speak the GPT response.
+            // CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT's response.", "DEBUG");
+            // Send the response in chunks to the chat if it's longer than a certain length.
+            if (GPTResponse.Length > 500)
+            {
+                LogToFile("The response is too long for Twitch; it will be sent in chunks to the chat.", "INFO");
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    // Determine the chunk size dynamically based on punctuation or space before 500 characters.
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    // Look for the last full word or punctuation if the chunkSize is less than the total length.
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
+                        if (lastBreakIndex > startIndex)
+                        {
+                            endIndex = lastBreakIndex;
+                        }
+                    }
+
+                    // Extract the substring for the current chunk.
+                    string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(messageChunk, true);
+                    // Update the startIndex for the next loop iteration.
+                    startIndex = endIndex;
+                    // Sleep after sending each message chunk to avoid flooding.
+                    System.Threading.Thread.Sleep(1000);
+                }
+
+                return true;
+            }
+            else
+            {
+                CPH.SendMessage(GPTResponse, true);
+                LogToFile("Sent GPT response to chat.", "DEBUG");
             }
 
             return true;
@@ -1893,139 +1989,460 @@ public class CPHInline
     }
 
     /// <summary>
-    /// Removes emojis and other non-ASCII characters from the provided text.
+    /// Sends a user's message to the GPT model and handles the response, including storing context and speaking the response aloud.
     /// </summary>
-    /// <param name = "text">The text from which emojis should be removed.</param>
-    /// <returns>The sanitized text without emojis.</returns>
-    private string RemoveEmojis(string text)
+    /// <returns>True if the GPT model provides a response, otherwise false.</returns>
+    public bool InvokeGPT_Assistant()
     {
-        LogToFile("Entering RemoveEmojis method.", "DEBUG");
+        LogToFile("Entering InvokeGPT Assistant method.", "DEBUG");
+        // Check if the ChatLog has been initialized and log the chat history if it exists.
+
+        // Retrieve and validate the voice alias global variable.
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
+        // Retrieve and validate the user name argument.
+        string userName;
+        if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
+        {
+            LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        userName = userNameObj.ToString();
+        LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
+        // Determine the nickname or username to speak.
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
+        if (string.IsNullOrWhiteSpace(userToSpeak))
+        {
+            LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Retrieve and validate the database path global variable.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path");
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
+        // Retrieve the full message to process, either the moderated message or the raw input.
+        string fullMessage;
+        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        {
+            fullMessage = moderatedMessageObj.ToString();
+        }
+        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
+        {
+            fullMessage = rawInputObj.ToString();
+        }
+        else
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Construct the paths to the context and keyword context files and ensure they exist.
+        string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
+        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
+        Dictionary<string, string> keywordContexts;
+        if (File.Exists(keywordContextFilePath))
+        {
+            string jsonContent = File.ReadAllText(keywordContextFilePath);
+            keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            LogToFile("Loaded existing keyword contexts from file.", "DEBUG");
+        }
+        else
+        {
+            keywordContexts = new Dictionary<string, string>();
+            LogToFile("Initialized new dictionary for keyword contexts.", "DEBUG");
+        }
+
+        // Load additional context from files and global variables.
+        string context = "";
+        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+        string contextBody = $"We are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+        LogToFile("Assembled context body for GPT prompt.", "DEBUG");
+        // Formulate the prompt for GPT.
+        string prompt = $"I am invoking the chatbot at a random interval. Please participate in the chat as Berries, using the context of the last 20 messages. Please keep your responses short and concise.";
+        LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
+        // Check for mentions of keywords within the prompt and add relevant context.
+        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        if (keywordMatch)
+        {
+            // If a keyword is mentioned, append its context to the body.
+            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+            string keywordPhrase = $"Something you know about {keyword} is:";
+            string keywordValue = keywordContexts[keyword];
+            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+            LogToFile("Added keyword-specific context to context body.", "DEBUG");
+        }
+
+        try
+        {
+            // Call the GPT model with the prompt and the context.
+            string GPTResponse = GenerateChatCompletion_Assistant(prompt, contextBody); // Placeholder for the actual GPT call.
+            if (string.IsNullOrWhiteSpace(GPTResponse))
+            {
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+                return false;
+            }
+
+            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            // DO NOT Speak the GPT response.
+            // CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT's response.", "DEBUG");
+            // Send the response in chunks to the chat if it's longer than a certain length.
+            if (GPTResponse.Length > 500)
+            {
+                LogToFile("The response is too long for Twitch; it will be sent in chunks to the chat.", "INFO");
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    // Determine the chunk size dynamically based on punctuation or space before 500 characters.
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    // Look for the last full word or punctuation if the chunkSize is less than the total length.
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
+                        if (lastBreakIndex > startIndex)
+                        {
+                            endIndex = lastBreakIndex;
+                        }
+                    }
+
+                    // Extract the substring for the current chunk.
+                    string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(messageChunk, true);
+                    // Update the startIndex for the next loop iteration.
+                    startIndex = endIndex;
+                    // Sleep after sending each message chunk to avoid flooding.
+                    System.Threading.Thread.Sleep(1000);
+                }
+
+                return true;
+            }
+            else
+            {
+                CPH.SendMessage(GPTResponse, true);
+                LogToFile("Sent GPT response to chat.", "DEBUG");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
+            return false;
+        }
+    }
+
+    private string CreateNewOpenAIAssistantThreadWithMessages(List<chatMessage> messages)
+    {
+        string threadId = "";
+
+        // Log the start of the thread creation process.
+        LogToFile("Starting the process to create an OpenAI Assistant thread.", "INFO");
+
+        try
+        {
+            // Retrieve the API key from global variables.
+            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+
+            // Set up the HTTP request to the OpenAI API.
+            using (var client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                client.DefaultRequestHeaders.Add("OpenAI-Beta", "assistants=v2");
+
+                // Serialize the messages object to JSON.
+                var requestBody = new
+                {
+                    messages = messages
+                };
+                var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
+
+                // Log the request payload for debugging.
+                LogToFile($"Request Payload: {JsonConvert.SerializeObject(requestBody, Formatting.Indented)}", "DEBUG");
+
+                // Send the request and get the response.
+                var response = client.PostAsync("https://api.openai.com/v1/threads", content).Result;
+
+                // Check if the response is successful.
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseBody = response.Content.ReadAsStringAsync().Result;
+                    var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseBody);
+
+                    // Extract the thread ID from the response.
+                    if (jsonResponse.ContainsKey("id"))
+                    {
+                        threadId = jsonResponse["id"].ToString();
+                        LogToFile($"Successfully created OpenAI Assistant thread with ID: {threadId}", "INFO");
+                        return threadId;
+                    }
+                    else
+                    {
+                        LogToFile("Failed to retrieve thread ID from OpenAI response.", "ERROR");
+                        return threadId;
+                    }
+                }
+                else
+                {
+                    // Log the response content for debugging.
+                    var errorResponseBody = response.Content.ReadAsStringAsync().Result;
+                    LogToFile($"Failed to create OpenAI Assistant thread. Status Code: {response.StatusCode}, Response: {errorResponseBody}", "ERROR");
+                    return threadId;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur.
+            LogToFile($"An error occurred while creating the OpenAI Assistant thread: {ex.Message}", "ERROR");
+            return threadId;
+        }
+    }
+    private string runOpenAIAssistantThread(string threadId)
+    {
+        string runId = "";
+
+        // Log the start of the thread run process.
+        LogToFile("Starting the process to run an OpenAI Assistant thread.", "DEBUG");
+
+        try
+        {
+            // Retrieve the API key and assistant ID from global variables.
+            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+            string assistantId = CPH.GetGlobalVar<string>("Assistant ID", true);
+            string toolChoice = CPH.GetGlobalVar<string>("Tool Choice", true);
+
+            // Set up the HTTP request to the OpenAI API.
+            using (var client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                client.DefaultRequestHeaders.Add("OpenAI-Beta", "assistants=v2");
+
+                // Serialize the assistant ID to JSON.
+                var requestBody = new
+                {
+                    assistant_id = assistantId,
+                    tool_choice = toolChoice
+                };
+                var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
+
+                // Send the request and get the response.
+                var response = client.PostAsync($"https://api.openai.com/v1/threads/{threadId}/runs", content).Result;
+
+                // Check if the response is successful.
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseBody = response.Content.ReadAsStringAsync().Result;
+                    var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseBody);
+
+                    // Extract the run ID from the response.
+                    if (jsonResponse.ContainsKey("id"))
+                    {
+                        runId = jsonResponse["id"].ToString();
+                        string status = jsonResponse["status"].ToString();
+
+                        LogToFile($"Successfully created OpenAI Assistant run with ID: {runId} and status: {status}", "DEBUG");
+                        return runId;
+                    }
+                    else
+                    {
+                        LogToFile("Failed to retrieve run ID or status from OpenAI response.", "ERROR");
+                        return runId;
+                    }
+                }
+                else
+                {
+                    LogToFile($"Failed to create OpenAI Assistant run. Status Code: {response.StatusCode}", "ERROR");
+                    return runId;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur.
+            LogToFile($"An error occurred while creating the OpenAI Assistant run: {ex.Message}", "ERROR");
+            return runId;
+        }
+    }
+
+    private bool getStatusOfRun(string threadId, string runId)
+    {
+        // Log the start of the status check process.
+        LogToFile("Starting the process to check the status of an OpenAI Assistant run.", "DEBUG");
+
+        // Log the parameters passed to the method.
+        LogToFile($"Thread ID: {threadId}, Run ID: {runId}", "DEBUG");
+
+        string status = "";
+
+        try
+        {
+            // Retrieve the API key from global variables.
+            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+            int retryCount = 0;
+
+            // Set up the HTTP request to the OpenAI API.
+            using (var client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                client.DefaultRequestHeaders.Add("OpenAI-Beta", "assistants=v2");
+
+                // Send the request and get the response.
+                var response = client.GetAsync($"https://api.openai.com/v1/threads/{threadId}/runs/{runId}").Result;
+
+                // Check if the response is successful.
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseBody = response.Content.ReadAsStringAsync().Result;
+                    var jsonResponse = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseBody);
+
+                    // Extract the status from the response.
+                    if (jsonResponse.ContainsKey("status"))
+                    {
+                        status = jsonResponse["status"].ToString();
+                        LogToFile($"Run status: {status}", "INFO");
+
+                        if (status == "completed")
+                        {
+                            LogToFile("The OpenAI Assistant run is complete.", "INFO");
+                            return true;
+                        }
+                        else if ((status == "in_progress" || status == "queued") && retryCount < 10)
+                        {
+                            LogToFile("The OpenAI Assistant run is still in progress.", "INFO");
+                            System.Threading.Thread.Sleep(500); // Wait for 0.5 seconds before checking again.
+                            retryCount++;
+                            return getStatusOfRun(threadId, runId);
+                        }
+                        else
+                        {
+                            LogToFile("The OpenAI Assistant run has failed or encountered an error.", "ERROR");
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        LogToFile("Failed to retrieve status from OpenAI response.", "ERROR");
+                        return false;
+                    }
+                }
+                else
+                {
+                    LogToFile($"Failed to check the status of the OpenAI Assistant run. Status Code: {response.StatusCode}", "ERROR");
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions that occur.
+            LogToFile($"An error occurred while checking the status of the OpenAI Assistant run: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    private string RemoveSourcesAnnotation(string text)
+    {
+        LogToFile("Entering RemoveSourcesAnnotation method.", "DEBUG");
         // Log the original text if needed for debugging.
-        LogToFile($"Original text before removing emojis: {text}", "DEBUG");
-        // Regular expression pattern to match emoji characters specifically
-        string emojiPattern = @"[\uD83C-\uDBFF\uDC00-\uDFFF]";  // Use Unicode property for emoji characters
-        // Log the regular expression pattern used for removing emojis.
-        LogToFile($"Using regex pattern to remove emojis: {emojiPattern}", "DEBUG");
-        // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string.
-        string sanitizedText = Regex.Replace(text, emojiPattern, "");
-        // Log the text after removing emojis.
-        LogToFile($"Text after removing emojis: {sanitizedText}", "DEBUG");
-        // Remove any extra spaces left after removing the emojis.
+        LogToFile($"Original text before removing sources: {text}", "DEBUG");
+
+        // Regular expression pattern to match the source pattern.
+        string sourcePattern = @"【.*?】";
+
+        // Log the regular expression patterns used for removing sources.
+        LogToFile($"Using regex pattern to remove sources: {sourcePattern}", "DEBUG");
+
+        // Regular expression to match and remove sources from the 'text' string.
+        string sanitizedText = Regex.Replace(text, sourcePattern, "");
+
+        // Log the text after removing emojis and sources.
+        LogToFile($"Text after removing sources: {sanitizedText}", "DEBUG");
+
+        // Remove any extra spaces left after removing the emojis and sources.
         sanitizedText = Regex.Replace(sanitizedText, @"\s+", " ").Trim();
+
         // Log the final sanitized text.
-        LogToFile($"Sanitized text without emojis: {sanitizedText}", "INFO");
+        LogToFile($"Sanitized text without sources: {sanitizedText}", "INFO");
+
         return sanitizedText;
     }
 
-    /// <summary>
-    /// Generates a response from the GPT model using the provided prompt and context.
-    /// </summary>
-    /// <param name = "prompt">The user's prompt to the GPT model.</param>
-    /// <param name = "contextBody">The context body to provide background information to the GPT model.</param>
-    /// <returns>The generated response text from the GPT model.</returns>
-    public string GenerateChatCompletion(string prompt, string contextBody)
+    private string GetFirstMessageFromThread(string threadId)
     {
-        LogToFile("Entering GenerateChatCompletion method.", "DEBUG");
-        // Initialize the variable to hold the generated text.
-        string generatedText = string.Empty;
-        // Retrieve the necessary global variables for OpenAI API.
-        string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
-        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
-        string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
-        // Logging the retrieved API key, voice alias, and AI model for debugging purposes.
-        LogToFile($"Voice Alias: {voiceAlias}, AI Model: {AIModel}", "DEBUG");
-        // Check if the necessary configuration values are present.
-        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(AIModel))
-        {
-            LogToFile("One or more configuration values are missing or invalid. Please check the OpenAI API Key, Voice Alias, and AI Model settings.", "ERROR");
-            return "Configuration error. Please check the log for details.";
-        }
+        // Log the start of the process.
+        LogToFile("Starting the process to get the first message from an OpenAI Assistant thread.", "DEBUG");
 
-        LogToFile("All configuration values are valid and present.", "DEBUG");
-        // Define the OpenAI completions endpoint.
-        string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
-        // Log that all necessary configuration values are present.
-        LogToFile("All configuration values are valid and present.", "DEBUG");
-        // Construct the list of messages including system, assistant, and user messages.
-        var messages = new List<chatMessage>
-        {
-            new chatMessage
-            {
-                role = "system",
-                content = contextBody
-            },
-            // Add instruction message for the GPT model here.
-            new chatMessage
-            {
-                role = "user",
-                content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
-            },
-            // Assistant's acknowledgment message.
-            new chatMessage
-            {
-                role = "assistant",
-                content = "OK"
-            }
-        };
-        // Process user messages stored in ChatLog.
-        if (ChatLog != null)
-        {
-            foreach (var chatMessage in ChatLog)
-            {
-                messages.Add(chatMessage);
-                // Assistant's acknowledgment message for each user message.
-                messages.Add(new chatMessage { role = "assistant", content = "OK" });
-            }
-        }
-
-        // Add the "FINISHED" message from the user and final "OK" from the assistant.
-        messages.Add(new chatMessage { role = "user", content = "FINISHED" });
-        messages.Add(new chatMessage { role = "assistant", content = "OK" });
-        // Add messages from GPTLog after the chat log has been sent.
-        if (GPTLog != null)
-        {
-            foreach (var gptMessage in GPTLog)
-            {
-                messages.Add(gptMessage);
-            }
-        }
-
-        // Finally, add the user's current prompt to the messages.
-        messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
-        // Serialize the completion request to JSON.
-        string completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
-        // Log the JSON payload that will be sent to the OpenAI API.
-        LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
-        // Create and configure the web request to the OpenAI API.
-        WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
-        completionsWebRequest.Method = "POST";
-        completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
-        completionsWebRequest.ContentType = "application/json";
-        // Send the request and handle the response.
         try
         {
-            using (Stream requestStream = completionsWebRequest.GetRequestStream())
-            {
-                byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
-                requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
-            }
+            // Retrieve the API key from global variables.
+            string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
 
-            using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
-            {
-                using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
-                {
-                    string completionsResponseContent = responseReader.ReadToEnd();
-                    LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
-                    var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
-                    generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
-                }
+            // Set up the HTTP request to the OpenAI API.
+            string url = $"https://api.openai.com/v1/threads/{threadId}/messages";
+            WebRequest request = WebRequest.Create(url);
+            request.Method = "GET";
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+            request.Headers.Add("OpenAI-Beta", "assistants=v2");
+            request.ContentType = "application/json";
 
-                // Check the 'Strip Emojis From Response' setting and remove emojis from response if set to true.
-                bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
-                if (stripEmojis)
+            // Send the request and get the response.
+            using (WebResponse response = request.GetResponse())
+            {
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
                 {
-                    generatedText = RemoveEmojis(generatedText);
-                    LogToFile("Emojis have been removed from the response.", "INFO");
+                    string responseBody = reader.ReadToEnd();
+
+                    LogToFile($"Response JSON: {responseBody}", "DEBUG");
+
+                    JObject json = JObject.Parse(responseBody);
+
+                    // Ensure "data" exists and has at least one element before accessing.
+                    if (json["data"] is JArray dataArray && dataArray.Count > 0)
+                    {
+                        // Navigate to the first message's content
+                        string value = dataArray[0]?["content"]?[0]?["text"]?["value"]?.ToString();
+                        if (!string.IsNullOrEmpty(value))
+                        {
+                            return RemoveSourcesAnnotation(value);
+                        }
+                        else
+                        {
+                            LogToFile("First message content 'value' is null or empty.", "WARNING");
+                        }
+                    }
+                    else
+                    {
+                        LogToFile("'data' array is empty or missing in the response JSON.", "ERROR");
+                    }
                 }
             }
         }
@@ -2039,34 +2456,197 @@ public class CPHInline
                     LogToFile($"WebException Response: {reader.ReadToEnd()}", "ERROR");
                 }
             }
+            return null;
         }
         catch (Exception ex)
         {
-            LogToFile($"An exception occurred: {ex.Message}", "ERROR");
+            LogToFile($"An error occurred while getting the first message from the assistant thread: {ex.Message}", "ERROR");
+            return null;
+        }
+
+        return null; // Default return if no valid message is found.
+    }
+
+    /// <summary>
+    /// Generates a response from the GPT model using the provided prompt and context.
+    /// </summary>
+    /// <param name = "prompt">The user's prompt to the GPT model.</param>
+    /// <param name = "contextBody">The context body to provide background information to the GPT model.</param>
+    /// <returns>The generated response text from the GPT model.</returns>
+    public string GenerateChatCompletion_Assistant(string prompt, string contextBody)
+    {
+        string assistantResponse = string.Empty;
+
+        LogToFile("Entering GenerateChatCompletion Assistant method.", "DEBUG");
+        // Initialize the variable to hold the generated text.
+        string generatedText = string.Empty;
+        // Retrieve the necessary global variables for OpenAI API.
+        string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+        string AssistantID = CPH.GetGlobalVar<string>("Assistant ID", true);
+        // Logging the retrieved API key, voice alias, and AI model for debugging purposes.
+        LogToFile($"Voice Alias: {voiceAlias}, AI Model: {AIModel}, AssistantID: {AssistantID}", "DEBUG");
+        // Check if the necessary configuration values are present.
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(AIModel) || string.IsNullOrWhiteSpace(AssistantID))
+        {
+            LogToFile("One or more configuration values are missing or invalid. Please check the OpenAI API Key, Voice Alias, AI Model, or Assistant ID settings.", "ERROR");
+            return assistantResponse;
+        }
+
+        LogToFile("All configuration values are valid and present.", "DEBUG");
+        // Define the OpenAI completions endpoint.
+        string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+        string threadEndpoint = "https://api.openai.com/v1/threads";
+
+        // Log that all necessary configuration values are present.
+        LogToFile("All configuration values are valid and present.", "DEBUG");
+        // Construct the list of messages including system, assistant, and user messages.
+        var messages = new List<chatMessage>
+        {
+            new chatMessage
+            {
+                role = "user",
+                content = contextBody
+            }
+            // },
+            // // Add instruction message for the GPT model here.
+            // new chatMessage
+            // {
+            //     role = "user",
+            //     content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+            // },
+            // // Assistant's acknowledgment message.
+            // new chatMessage
+            // {
+            //     role = "assistant",
+            //     content = "OK"
+            // }
+        };
+        // Process user messages stored in ChatLog.
+        if (ChatLog != null)
+        {
+            foreach (var chatMessage in ChatLog)
+            {
+                messages.Add(chatMessage);
+                // Assistant's acknowledgment message for each user message.
+                // messages.Add(new chatMessage { role = "assistant", content = "OK" });
+            }
+        }
+
+        // Add the "FINISHED" message from the user and final "OK" from the assistant.
+        // messages.Add(new chatMessage { role = "user", content = "FINISHED" });
+        // messages.Add(new chatMessage { role = "assistant", content = "OK" });
+        // // Add messages from GPTLog after the chat log has been sent.
+        // if (GPTLog != null)
+        // {
+        //     foreach (var gptMessage in GPTLog)
+        //     {
+        //         messages.Add(gptMessage);
+        //     }
+        // }
+
+        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+
+        // Finally, add the user's current prompt to the messages.
+        messages.Add(new chatMessage { role = "user", content = $"{prompt}." });
+
+        // Now create a new thread ID for the assistant with the messages
+        string threadId = CreateNewOpenAIAssistantThreadWithMessages(messages);
+
+        // Log the thread ID for debugging purposes.
+        LogToFile($"Thread ID: {threadId}", "INFO");
+
+        if (string.IsNullOrEmpty(threadId))
+        {
+            LogToFile("Failed to create a new thread for the assistant.", "ERROR");
+            return assistantResponse;
+        }
+
+        // Now attempt to run the assistant with the thread ID
+        string runId = runOpenAIAssistantThread(threadId);
+
+        if (string.IsNullOrEmpty(runId))
+        {
+            LogToFile("Failed to run the assistant thread.", "ERROR");
+            return assistantResponse;
+        }
+
+        // Log the thread ID and run ID for debugging purposes.
+        LogToFile($"Thread ID: {threadId}, Run ID: {runId}", "INFO");
+
+        // Now check to see if the run completed successfully
+        if (!getStatusOfRun(threadId, runId))
+        {
+            LogToFile("Failed to get the status of the assistant run.", "ERROR");
+            return assistantResponse;
+        }
+
+        // Now get the first message from the thread
+        assistantResponse = GetFirstMessageFromThread(threadId);
+
+        if (assistantResponse == null)
+        {
+            LogToFile("Failed to get the first message from the assistant thread.", "ERROR");
+            return assistantResponse;
+        }
+
+        // Check the 'Strip Emojis From Response' setting and remove emojis from response if set to true.
+        bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
+
+        if (stripEmojis)
+        {
+            assistantResponse = RemoveEmojis(assistantResponse);
+            LogToFile("Emojis have been removed from the response.", "INFO");
         }
 
         // Handle the case where GPT does not return a response.
-        if (string.IsNullOrEmpty(generatedText))
+        if (string.IsNullOrEmpty(assistantResponse))
         {
-            generatedText = "ChatGPT did not return a response.";
+            assistantResponse = "ChatGPT did not return a response.";
             LogToFile("The GPT model did not return any text.", "ERROR");
         }
         else
         {
             // Replace line breaks with spaces in the generated text.
-            generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
+            assistantResponse = assistantResponse.Replace("\r\n", " ").Replace("\n", " ");
             LogToFile($"Prompt: {prompt}", "INFO");
-            LogToFile($"Response: {generatedText}", "INFO");
+            LogToFile($"Response: {assistantResponse}", "INFO");
         }
 
         // Enqueue the user's prompt and the assistant's generated text to GPTLog as a balanced pair.
         // The QueueGPTMessage method ensures that there is an equal number of user and assistant messages.
         // It maintains the limit of 5 user messages and 5 assistant messages within GPTLog.
-        QueueGPTMessage(prompt, generatedText);
+        QueueGPTMessage(prompt, assistantResponse);
         // Optionally post question and answer to Discord if enabled.
-        PostToDiscord(prompt, generatedText);
+        PostToDiscord(prompt, assistantResponse);
         // Return the processed text.
-        return generatedText;
+        return assistantResponse;
+    }
+
+    /// <summary>
+    /// Removes emojis and other non-ASCII characters from the provided text.
+    /// </summary>
+    /// <param name = "text">The text from which emojis should be removed.</param>
+    /// <returns>The sanitized text without emojis.</returns>
+    private string RemoveEmojis(string text)
+    {
+        LogToFile("Entering RemoveEmojis method.", "DEBUG");
+        // Log the original text if needed for debugging.
+        LogToFile($"Original text before removing emojis: {text}", "DEBUG");
+        // Regular expression pattern to match non-ASCII characters (emojis).
+        string nonAsciiPattern = @"[^\u0000-\u007F]+";
+        // Log the regular expression pattern used for removing emojis.
+        LogToFile($"Using regex pattern to remove emojis: {nonAsciiPattern}", "DEBUG");
+        // Regular expression to match and remove emojis (non-ASCII characters) from the 'text' string.
+        string sanitizedText = Regex.Replace(text, nonAsciiPattern, "");
+        // Log the text after removing emojis.
+        LogToFile($"Text after removing emojis: {sanitizedText}", "DEBUG");
+        // Remove any extra spaces left after removing the emojis.
+        sanitizedText = Regex.Replace(sanitizedText, @"\s+", " ").Trim();
+        // Log the final sanitized text.
+        LogToFile($"Sanitized text without emojis: {sanitizedText}", "INFO");
+        return sanitizedText;
     }
 
     private void PostToDiscord(string question, string answer)
@@ -2369,233 +2949,536 @@ public class CPHInline
     }
 
     /// <summary>
-    /// Retrieves the nickname from the file.
+    /// Generates a response from the GPT model using the provided prompt and context.
     /// </summary>
-    /// <returns>True if the nickname is found or not found; otherwise, false if an error occurs.</returns>
-    public bool GetNickname()
+    /// <param name = "prompt">The user's prompt to the GPT model.</param>
+    /// <param name = "contextBody">The context body to provide background information to the GPT model.</param>
+    /// <returns>The generated response text from the GPT model.</returns>
+    public string GenerateChatCompletion(string prompt, string contextBody)
     {
+        LogToFile("Entering GenerateChatCompletion method.", "DEBUG");
+        // Initialize the variable to hold the generated text.
+        string generatedText = string.Empty;
+        // Retrieve the necessary global variables for OpenAI API.
+        string apiKey = CPH.GetGlobalVar<string>("OpenAI API Key", true);
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        string AIModel = CPH.GetGlobalVar<string>("OpenAI Model", true);
+        // Logging the retrieved API key, voice alias, and AI model for debugging purposes.
+        LogToFile($"Voice Alias: {voiceAlias}, AI Model: {AIModel}", "DEBUG");
+        // Check if the necessary configuration values are present.
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(voiceAlias) || string.IsNullOrWhiteSpace(AIModel))
+        {
+            LogToFile("One or more configuration values are missing or invalid. Please check the OpenAI API Key, Voice Alias, and AI Model settings.", "ERROR");
+            return "Configuration error. Please check the log for details.";
+        }
+
+        LogToFile("All configuration values are valid and present.", "DEBUG");
+        // Define the OpenAI completions endpoint.
+        string completionsEndpoint = "https://api.openai.com/v1/chat/completions";
+        // Log that all necessary configuration values are present.
+        LogToFile("All configuration values are valid and present.", "DEBUG");
+        // Construct the list of messages including system, assistant, and user messages.
+        var messages = new List<chatMessage>
+        {
+            new chatMessage
+            {
+                role = "system",
+                content = contextBody
+            },
+            // Add instruction message for the GPT model here.
+            new chatMessage
+            {
+                role = "user",
+                content = "I am going to send you the chat log from Twitch. You should reference these messages for all future prompts if it is relevant to the prompt being asked. Each message will be prefixed with the users name that you can refer to them as, if referring to their message in the response. After each message you receive, you will return simply \"OK\" to indicate you have received this message, and no other text. When I am finished I will say FINISHED, and you will again respond with simply \"OK\" and nothing else, and then resume normal operation on all future prompts."
+            },
+            // Assistant's acknowledgment message.
+            new chatMessage
+            {
+                role = "assistant",
+                content = "OK"
+            }
+        };
+        // Process user messages stored in ChatLog.
+        if (ChatLog != null)
+        {
+            foreach (var chatMessage in ChatLog)
+            {
+                messages.Add(chatMessage);
+                // Assistant's acknowledgment message for each user message.
+                messages.Add(new chatMessage { role = "assistant", content = "OK" });
+            }
+        }
+
+        // Add the "FINISHED" message from the user and final "OK" from the assistant.
+        messages.Add(new chatMessage { role = "user", content = "FINISHED" });
+        messages.Add(new chatMessage { role = "assistant", content = "OK" });
+        // Add messages from GPTLog after the chat log has been sent.
+        if (GPTLog != null)
+        {
+            foreach (var gptMessage in GPTLog)
+            {
+                messages.Add(gptMessage);
+            }
+        }
+
+        // Finally, add the user's current prompt to the messages.
+        messages.Add(new chatMessage { role = "user", content = $"{prompt} You must respond in less than 500 characters." });
+        // Serialize the completion request to JSON.
+        string completionsRequestJSON = JsonConvert.SerializeObject(new { model = AIModel, messages = messages }, Formatting.Indented);
+        // Log the JSON payload that will be sent to the OpenAI API.
+        LogToFile($"Request JSON: {completionsRequestJSON}", "DEBUG");
+        // Create and configure the web request to the OpenAI API.
+        WebRequest completionsWebRequest = WebRequest.Create(completionsEndpoint);
+        completionsWebRequest.Method = "POST";
+        completionsWebRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
+        completionsWebRequest.ContentType = "application/json";
+        // Send the request and handle the response.
         try
         {
-            // Get the path where the database is stored
-            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-            if (string.IsNullOrWhiteSpace(databasePath))
+            using (Stream requestStream = completionsWebRequest.GetRequestStream())
             {
-                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
+                byte[] completionsContentBytes = Encoding.UTF8.GetBytes(completionsRequestJSON);
+                requestStream.Write(completionsContentBytes, 0, completionsContentBytes.Length);
+            }
+
+            using (WebResponse completionsWebResponse = completionsWebRequest.GetResponse())
+            {
+                using (StreamReader responseReader = new StreamReader(completionsWebResponse.GetResponseStream()))
+                {
+                    string completionsResponseContent = responseReader.ReadToEnd();
+                    LogToFile($"Response JSON: {completionsResponseContent}", "DEBUG");
+                    var completionsJsonResponse = JsonConvert.DeserializeObject<ChatCompletionsResponse>(completionsResponseContent);
+                    generatedText = completionsJsonResponse?.Choices?.FirstOrDefault()?.Message?.content ?? string.Empty;
+                }
+
+                // Check the 'Strip Emojis From Response' setting and remove emojis from response if set to true.
+                bool stripEmojis = CPH.GetGlobalVar<bool>("Strip Emojis From Response", true);
+                if (stripEmojis)
+                {
+                    generatedText = RemoveEmojis(generatedText);
+                    LogToFile("Emojis have been removed from the response.", "INFO");
+                }
+            }
+        }
+        catch (WebException webEx)
+        {
+            LogToFile($"A WebException was caught: {webEx.Message}", "ERROR");
+            if (webEx.Response != null)
+            {
+                using (var reader = new StreamReader(webEx.Response.GetResponseStream()))
+                {
+                    LogToFile($"WebException Response: {reader.ReadToEnd()}", "ERROR");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogToFile($"An exception occurred: {ex.Message}", "ERROR");
+        }
+
+        // Handle the case where GPT does not return a response.
+        if (string.IsNullOrEmpty(generatedText))
+        {
+            generatedText = "ChatGPT did not return a response.";
+            LogToFile("The GPT model did not return any text.", "ERROR");
+        }
+        else
+        {
+            // Replace line breaks with spaces in the generated text.
+            generatedText = generatedText.Replace("\r\n", " ").Replace("\n", " ");
+            LogToFile($"Prompt: {prompt}", "INFO");
+            LogToFile($"Response: {generatedText}", "INFO");
+        }
+
+        // Enqueue the user's prompt and the assistant's generated text to GPTLog as a balanced pair.
+        // The QueueGPTMessage method ensures that there is an equal number of user and assistant messages.
+        // It maintains the limit of 5 user messages and 5 assistant messages within GPTLog.
+        QueueGPTMessage(prompt, generatedText);
+        // Optionally post question and answer to Discord if enabled.
+        PostToDiscord(prompt, generatedText);
+        // Return the processed text.
+        return generatedText;
+    }
+
+    /// <summary>
+    /// Sends a user's message to the GPT model and handles the response, including storing context and speaking the response aloud.
+    /// </summary>
+    /// <returns>True if the GPT model provides a response, otherwise false.</returns>
+    public bool AskGPT()
+    {
+        LogToFile("Entering AskGPT method.", "DEBUG");
+        // Check if the ChatLog has been initialized and log the chat history if it exists.
+        if (ChatLog == null)
+        {
+            ChatLog = new Queue<chatMessage>();
+            LogToFile("ChatLog queue has been initialized for the first time.", "INFO");
+        }
+        else
+        {
+            // Using LINQ to concatenate the message contents, separated by newlines.
+            string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
+            LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
+        }
+
+        // Retrieve and validate the voice alias global variable.
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
+        // Retrieve and validate the user name argument.
+        string userName;
+        if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
+        {
+            LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        userName = userNameObj.ToString();
+        LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
+        // Determine the nickname or username to speak.
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
+        if (string.IsNullOrWhiteSpace(userToSpeak))
+        {
+            LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Retrieve and validate the database path global variable.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path");
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
+        // Retrieve the full message to process, either the moderated message or the raw input.
+        string fullMessage;
+        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        {
+            fullMessage = moderatedMessageObj.ToString();
+        }
+        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
+        {
+            fullMessage = rawInputObj.ToString();
+        }
+        else
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Construct the paths to the context and keyword context files and ensure they exist.
+        string ContextFilePath = Path.Combine(databasePath, "context.txt");
+        string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
+        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
+        Dictionary<string, string> keywordContexts;
+        if (File.Exists(keywordContextFilePath))
+        {
+            string jsonContent = File.ReadAllText(keywordContextFilePath);
+            keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            LogToFile("Loaded existing keyword contexts from file.", "DEBUG");
+        }
+        else
+        {
+            keywordContexts = new Dictionary<string, string>();
+            LogToFile("Initialized new dictionary for keyword contexts.", "DEBUG");
+        }
+
+        // Load additional context from files and global variables.
+        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
+        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+        string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+        LogToFile("Assembled context body for GPT prompt.", "DEBUG");
+        // Formulate the prompt for GPT.
+        string prompt = $"{userToSpeak} asks: {fullMessage}";
+        LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
+        // Check for mentions of keywords within the prompt and add relevant context.
+        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        if (keywordMatch)
+        {
+            // If a keyword is mentioned, append its context to the body.
+            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+            string keywordPhrase = $"Something you know about {keyword} is:";
+            string keywordValue = keywordContexts[keyword];
+            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+            LogToFile("Added keyword-specific context to context body.", "DEBUG");
+        }
+
+        // Check for user-specific context and append it as well.
+        if (keywordContexts.ContainsKey(userName))
+        {
+            string usernamePhrase = $"Something you know about {userToSpeak} is:";
+            string usernameValue = keywordContexts[userName];
+            contextBody += $"\n{usernamePhrase} {usernameValue}\n";
+            LogToFile("Added user-specific context to context body.", "DEBUG");
+        }
+
+        try
+        {
+            // Call the GPT model with the prompt and the context.
+            string GPTResponse = GenerateChatCompletion(prompt, contextBody); // Placeholder for the actual GPT call.
+            if (string.IsNullOrWhiteSpace(GPTResponse))
+            {
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
                 return false;
             }
 
-            // Check if the preferred usernames file exists, create if not
-            string filePath = Path.Combine(databasePath, "preferred_userNames.json");
-            if (!File.Exists(filePath))
+            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            // Speak the GPT response.
+            CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT's response.", "INFO");
+            // Send the response in chunks to the chat if it's longer than a certain length.
+            if (GPTResponse.Length > 500)
             {
-                LogToFile("'preferred_userNames.json' does not exist. Creating default file.", "WARN");
-                CreateDefaultUserNameFile(filePath);
+                LogToFile("The response is too long for Twitch; it will be sent in chunks to the chat.", "INFO");
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    // Determine the chunk size dynamically based on punctuation or space before 500 characters.
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    // Look for the last full word or punctuation if the chunkSize is less than the total length.
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
+                        if (lastBreakIndex > startIndex)
+                        {
+                            endIndex = lastBreakIndex;
+                        }
+                    }
+
+                    // Extract the substring for the current chunk.
+                    string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(messageChunk, true);
+                    // Update the startIndex for the next loop iteration.
+                    startIndex = endIndex;
+                    // Sleep after sending each message chunk to avoid flooding.
+                    System.Threading.Thread.Sleep(1000);
+                }
+
+                return true;
+            }
+            else
+            {
+                CPH.SendMessage(GPTResponse, true);
+                LogToFile("Sent GPT response to chat.", "INFO");
             }
 
-            // Retrieve the userName value from the args dictionary
-            string userName = args.ContainsKey("userName") ? args["userName"].ToString() : "";
-            // Retrieve the preferred username
-            string preferredUserName = GetPreferredUsername(userName, filePath);
-            if (string.IsNullOrWhiteSpace(preferredUserName))
-            {
-                LogToFile("Preferred user name could not be retrieved.", "WARN");
-            }
-
-            // Set the nickname argument
-            CPH.SetArgument("nickname", preferredUserName);
             return true;
         }
         catch (Exception ex)
         {
-            // Log any exceptions that occur during the method execution
-            LogToFile($"An error occurred in GetNickname: {ex.Message}", "ERROR");
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
             return false;
         }
     }
 
-    /// <summary>
-    /// Saves the settings to a JSON file in the specified database path.
-    /// </summary>
-    /// <returns>True if the settings are saved successfully; otherwise, false if an error occurs.</returns>
-    public bool SaveSettings()
+    public bool AskGPTNoSpeech()
     {
+        LogToFile("Entering AskGPT method.", "DEBUG");
+        // Check if the ChatLog has been initialized and log the chat history if it exists.
+        if (ChatLog == null)
+        {
+            ChatLog = new Queue<chatMessage>();
+            LogToFile("ChatLog queue has been initialized for the first time.", "INFO");
+        }
+        else
+        {
+            // Using LINQ to concatenate the message contents, separated by newlines.
+            string chatLogAsString = string.Join(Environment.NewLine, ChatLog.Select(m => m.content ?? "null"));
+            LogToFile($"ChatLog Content before asking GPT: {Environment.NewLine}{chatLogAsString}", "INFO");
+        }
+
+        // Retrieve and validate the voice alias global variable.
+        string voiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true);
+        if (string.IsNullOrWhiteSpace(voiceAlias))
+        {
+            LogToFile("'Voice Alias' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Voice Alias' global variable.", "DEBUG");
+        // Retrieve and validate the user name argument.
+        string userName;
+        if (!args.TryGetValue("userName", out object userNameObj) || string.IsNullOrWhiteSpace(userNameObj?.ToString()))
+        {
+            LogToFile("'userName' argument is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        userName = userNameObj.ToString();
+        LogToFile("Retrieved and validated 'userName' argument.", "DEBUG");
+        // Determine the nickname or username to speak.
+        string userToSpeak = args.TryGetValue("nicknamePronouns", out object nicknameObj) && !string.IsNullOrWhiteSpace(nicknameObj?.ToString()) ? nicknameObj.ToString() : userName;
+        if (string.IsNullOrWhiteSpace(userToSpeak))
+        {
+            LogToFile("Both 'nicknamePronouns' and 'userName' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Retrieve and validate the database path global variable.
+        string databasePath = CPH.GetGlobalVar<string>("Database Path");
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            LogToFile("'Database Path' global variable is not found or not a valid string.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        LogToFile("Retrieved and validated 'Database Path' global variable.", "DEBUG");
+        // Retrieve the full message to process, either the moderated message or the raw input.
+        string fullMessage;
+        if (args.TryGetValue("moderatedMessage", out object moderatedMessageObj) && !string.IsNullOrWhiteSpace(moderatedMessageObj?.ToString()))
+        {
+            fullMessage = moderatedMessageObj.ToString();
+        }
+        else if (args.TryGetValue("rawInput", out object rawInputObj) && !string.IsNullOrWhiteSpace(rawInputObj?.ToString()))
+        {
+            fullMessage = rawInputObj.ToString();
+        }
+        else
+        {
+            LogToFile("Both 'moderatedMessage' and 'rawInput' are not found or are empty strings.", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
+            return false;
+        }
+
+        // Construct the paths to the context and keyword context files and ensure they exist.
+        string ContextFilePath = Path.Combine(databasePath, "context.txt");
+        string keywordContextFilePath = Path.Combine(databasePath, "keyword_contexts.json");
+        LogToFile("Constructed file paths for context and keyword context storage.", "DEBUG");
+        // Check if the keyword context file exists and read its contents; otherwise, initialize an empty dictionary.
+        Dictionary<string, string> keywordContexts;
+        if (File.Exists(keywordContextFilePath))
+        {
+            string jsonContent = File.ReadAllText(keywordContextFilePath);
+            keywordContexts = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonContent) ?? new Dictionary<string, string>();
+            LogToFile("Loaded existing keyword contexts from file.", "DEBUG");
+        }
+        else
+        {
+            keywordContexts = new Dictionary<string, string>();
+            LogToFile("Initialized new dictionary for keyword contexts.", "DEBUG");
+        }
+
+        // Load additional context from files and global variables.
+        string context = File.Exists(ContextFilePath) ? File.ReadAllText(ContextFilePath) : "";
+        string broadcaster = CPH.GetGlobalVar<string>("broadcaster", false);
+        string currentTitle = CPH.GetGlobalVar<string>("currentTitle", false);
+        string currentGame = CPH.GetGlobalVar<string>("currentGame", false);
+        string contextBody = $"{context}\nWe are currently doing: {currentTitle}\n{broadcaster} is currently playing: {currentGame}";
+        LogToFile("Assembled context body for GPT prompt.", "DEBUG");
+        // Formulate the prompt for GPT.
+        string prompt = $"{userToSpeak} asks: {fullMessage}";
+        LogToFile($"Constructed prompt for GPT: {prompt}", "DEBUG");
+        // Check for mentions of keywords within the prompt and add relevant context.
+        bool keywordMatch = keywordContexts.Keys.Any(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+        if (keywordMatch)
+        {
+            // If a keyword is mentioned, append its context to the body.
+            string keyword = keywordContexts.Keys.First(keyword => prompt.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0);
+            string keywordPhrase = $"Something you know about {keyword} is:";
+            string keywordValue = keywordContexts[keyword];
+            contextBody += $"\n{keywordPhrase} {keywordValue}\n";
+            LogToFile("Added keyword-specific context to context body.", "DEBUG");
+        }
+
+        // Check for user-specific context and append it as well.
+        if (keywordContexts.ContainsKey(userName))
+        {
+            string usernamePhrase = $"Something you know about {userToSpeak} is:";
+            string usernameValue = keywordContexts[userName];
+            contextBody += $"\n{usernamePhrase} {usernameValue}\n";
+            LogToFile("Added user-specific context to context body.", "DEBUG");
+        }
+
         try
         {
-            // Log the entry of the method
-            LogToFile("Entering SaveSettings method.", "DEBUG");
-            // Retrieve the settings from the global variables
-            AppSettings settings = new AppSettings
+            // Call the GPT model with the prompt and the context.
+            string GPTResponse = GenerateChatCompletion(prompt, contextBody); // Placeholder for the actual GPT call.
+            if (string.IsNullOrWhiteSpace(GPTResponse))
             {
-                OpenApiKey = EncryptData(CPH.GetGlobalVar<string>("OpenAI API Key", true)),
-                OpenAiModel = CPH.GetGlobalVar<string>("OpenAI Model", true),
-                DatabasePath = CPH.GetGlobalVar<string>("Database Path", true),
-                IgnoreBotUsernames = CPH.GetGlobalVar<string>("Ignore Bot Usernames", true),
-                VoiceAlias = CPH.GetGlobalVar<string>("Voice Alias", true),
-                StripEmojisFromResponse = CPH.GetGlobalVar<string>("Strip Emojis From Response", true),
-                LoggingLevel = CPH.GetGlobalVar<string>("Logging Level", true),
-                Version = CPH.GetGlobalVar<string>("Version", true),
-                HateAllowed = CPH.GetGlobalVar<string>("hate_allowed", true),
-                HateThreateningAllowed = CPH.GetGlobalVar<string>("hate_thretening_allowed", true),
-                SelfHarmAllowed = CPH.GetGlobalVar<string>("self-harm_allowed", true),
-                ViolenceAllowed = CPH.GetGlobalVar<string>("violence_allowed", true),
-                SelfHarmIntentAllowed = CPH.GetGlobalVar<string>("self-harm_intent_allowed", true),
-                SelfHarmInstructionsAllowed = CPH.GetGlobalVar<string>("self-harm_instructions_allowed", true),
-                HarassmentAllowed = CPH.GetGlobalVar<string>("harrassment_allowed", true),
-                HarassmentThreateningAllowed = CPH.GetGlobalVar<string>("harrassment_threatening_allowed", true),
-                LogGptQuestionsToDiscord = CPH.GetGlobalVar<string>("Log GPT Questions to Discord", true),
-                DiscordWebhookUrl = CPH.GetGlobalVar<string>("Discord Webhook URL", true),
-                DiscordBotUsername = CPH.GetGlobalVar<string>("Discord Bot Username", true),
-                DiscordAvatarUrl = CPH.GetGlobalVar<string>("Discord Avatar Url", true)
-            };
-            // Log the values of the settings (you can customize the format)
-            LogToFile($"OpenApiKey: {settings.OpenApiKey}", "DEBUG");
-            LogToFile($"OpenAiModel: {settings.OpenAiModel}", "DEBUG");
-            // Add similar logging for other settings...
-            // Check if any of the settings are null or empty
-            if (string.IsNullOrWhiteSpace(settings.OpenApiKey) || string.IsNullOrWhiteSpace(settings.OpenAiModel) || string.IsNullOrWhiteSpace(settings.DatabasePath) || string.IsNullOrWhiteSpace(settings.IgnoreBotUsernames) || string.IsNullOrWhiteSpace(settings.VoiceAlias) || string.IsNullOrWhiteSpace(settings.LoggingLevel) || string.IsNullOrWhiteSpace(settings.Version) || string.IsNullOrWhiteSpace(settings.DiscordWebhookUrl) || string.IsNullOrWhiteSpace(settings.DiscordBotUsername) || string.IsNullOrWhiteSpace(settings.DiscordAvatarUrl))
-            {
-                LogToFile("One or more settings are null or empty.", "WARN");
+                LogToFile("GPT model did not return a response.", "ERROR");
+                CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please check the log for details.", true);
                 return false;
             }
 
-            // Convert the settings object to JSON
-            var json = Newtonsoft.Json.JsonConvert.SerializeObject(settings);
-            // Save the JSON to the settings.json file in the specified database path
-            var filePath = Path.Combine(settings.DatabasePath, "settings.json");
-            File.WriteAllText(filePath, json);
-            // Log the values of the settings
-            LogToFile($"Settings saved successfully. Settings: {json}", "INFO");
-            // Log the success message for encryption
-            LogToFile("Encryption of OpenAI API Key successful.", "INFO");
-            // Log the exit of the method
-            LogToFile("Exiting SaveSettings method.", "DEBUG");
+            LogToFile($"GPT model response: {GPTResponse}", "DEBUG");
+            // DO NOT Speak the GPT response.
+            // CPH.TtsSpeak(voiceAlias, GPTResponse, false);
+            LogToFile("Spoke GPT's response.", "INFO");
+            // Send the response in chunks to the chat if it's longer than a certain length.
+            if (GPTResponse.Length > 500)
+            {
+                LogToFile("The response is too long for Twitch; it will be sent in chunks to the chat.", "INFO");
+                int startIndex = 0;
+                while (startIndex < GPTResponse.Length)
+                {
+                    // Determine the chunk size dynamically based on punctuation or space before 500 characters.
+                    int chunkSize = Math.Min(500, GPTResponse.Length - startIndex);
+                    int endIndex = startIndex + chunkSize;
+                    // Look for the last full word or punctuation if the chunkSize is less than the total length.
+                    if (endIndex < GPTResponse.Length)
+                    {
+                        int lastSpaceIndex = GPTResponse.LastIndexOf(' ', endIndex, chunkSize);
+                        int lastPunctuationIndex = GPTResponse.LastIndexOf('.', endIndex, chunkSize);
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('!', endIndex, chunkSize));
+                        lastPunctuationIndex = Math.Max(lastPunctuationIndex, GPTResponse.LastIndexOf('?', endIndex, chunkSize));
+                        int lastBreakIndex = Math.Max(lastSpaceIndex, lastPunctuationIndex);
+                        if (lastBreakIndex > startIndex)
+                        {
+                            endIndex = lastBreakIndex;
+                        }
+                    }
+
+                    // Extract the substring for the current chunk.
+                    string messageChunk = GPTResponse.Substring(startIndex, endIndex - startIndex).Trim();
+                    CPH.SendMessage(messageChunk, true);
+                    // Update the startIndex for the next loop iteration.
+                    startIndex = endIndex;
+                    // Sleep after sending each message chunk to avoid flooding.
+                    System.Threading.Thread.Sleep(1000);
+                }
+
+                return true;
+            }
+            else
+            {
+                CPH.SendMessage(GPTResponse, true);
+                LogToFile("Sent GPT response to chat.", "INFO");
+            }
+
             return true;
         }
         catch (Exception ex)
         {
-            // Log the error if there was an exception during saving
-            LogToFile($"Error saving settings: {ex.Message}", "ERROR");
+            // Log any exceptions that occur and notify the chat.
+            LogToFile($"An error occurred while processing the AskGPT request: {ex.Message}", "ERROR");
+            CPH.SendMessage("I'm sorry, but I can't answer that question right now. Please try again later.", true);
             return false;
-        }
-    }
-
-    public bool ReadSettings()
-    {
-        try
-        {
-            LogToFile("Entering ReadSettings method.", "DEBUG");
-            // Get the path where the database is stored
-            string databasePath = CPH.GetGlobalVar<string>("Database Path", true);
-            if (string.IsNullOrWhiteSpace(databasePath))
-            {
-                LogToFile("'Database Path' value is either not found or not a valid string.", "ERROR");
-                return false;
-            }
-
-            // Construct the path to the settings file
-            string filePath = Path.Combine(databasePath, "settings.json");
-            // Check if the settings file exists
-            if (!File.Exists(filePath))
-            {
-                LogToFile("Settings file not found.", "WARN");
-                return false;
-            }
-
-            // Read the JSON from the file
-            string json = File.ReadAllText(filePath);
-            // Deserialize the JSON into an instance of AppSettings
-            AppSettings settings = Newtonsoft.Json.JsonConvert.DeserializeObject<AppSettings>(json);
-            // Set the global variables using the SetGlobalVar method
-            CPH.SetGlobalVar("OpenAI API Key", DecryptData(settings.OpenApiKey), true);
-            CPH.SetGlobalVar("OpenAI Model", settings.OpenAiModel, true);
-            CPH.SetGlobalVar("Database Path", settings.DatabasePath, true);
-            CPH.SetGlobalVar("Ignore Bot Usernames", settings.IgnoreBotUsernames, true);
-            CPH.SetGlobalVar("Voice Alias", settings.VoiceAlias, true);
-            CPH.SetGlobalVar("Strip Emojis From Response", settings.StripEmojisFromResponse, true);
-            CPH.SetGlobalVar("Logging Level", settings.LoggingLevel, true);
-            CPH.SetGlobalVar("Version", settings.Version, true);
-            CPH.SetGlobalVar("hate_allowed", settings.HateAllowed, true);
-            CPH.SetGlobalVar("hate_thretening_allowed", settings.HateThreateningAllowed, true);
-            CPH.SetGlobalVar("self-harm_allowed", settings.SelfHarmAllowed, true);
-            CPH.SetGlobalVar("violence_allowed", settings.ViolenceAllowed, true);
-            CPH.SetGlobalVar("self-harm_intent_allowed", settings.SelfHarmIntentAllowed, true);
-            CPH.SetGlobalVar("self-harm_instructions_allowed", settings.SelfHarmInstructionsAllowed, true);
-            CPH.SetGlobalVar("harrassment_allowed", settings.HarassmentAllowed, true);
-            CPH.SetGlobalVar("harrassment_threatening_allowed", settings.HarassmentThreateningAllowed, true);
-            CPH.SetGlobalVar("Log GPT Questions to Discord", settings.LogGptQuestionsToDiscord, true);
-            CPH.SetGlobalVar("Discord Webhook URL", settings.DiscordWebhookUrl, true);
-            CPH.SetGlobalVar("Discord Bot Username", settings.DiscordBotUsername, true);
-            CPH.SetGlobalVar("Discord Avatar Url", settings.DiscordAvatarUrl, true);
-            // Log the values of the settings
-            LogToFile($"Settings loaded successfully. Settings: {json}", "INFO");
-            LogToFile("Exiting ReadSettings method.", "DEBUG");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // Log the error if there was an exception during reading the settings
-            LogToFile($"Error reading settings: {ex.Message}", "ERROR");
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Encrypts data using AES with machine-specific key management.
-    /// </summary>
-    /// <param name = "data">The data to be encrypted.</param>
-    /// <returns>The base64 encoded encrypted data, or null if an error occurs.</returns>
-    private string EncryptData(string data)
-    {
-        try
-        {
-            LogToFile("Entering EncryptData method.", "DEBUG");
-            // Encrypt the data using ProtectedData with current user scope and entropy
-            LogToFile("Encrypting data with user-specific key.", "INFO");
-            byte[] encryptedData = ProtectedData.Protect(Encoding.UTF8.GetBytes(data), null, DataProtectionScope.CurrentUser);
-            // Convert the encrypted data to base64 string for storage or transmission
-            LogToFile("Converting encrypted data to base64 string.", "INFO");
-            string base64EncryptedData = Convert.ToBase64String(encryptedData);
-            LogToFile("Data encrypted successfully.", "INFO");
-            LogToFile("Exiting EncryptData method.", "DEBUG");
-            return base64EncryptedData;
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"An error occurred in EncryptData: {ex.Message}", "ERROR");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Decrypts data using AES with machine-specific key management.
-    /// </summary>
-    /// <param name = "data">The data to be encrypted.</param>
-    /// <returns>The decrypted data as a string, or null if an error occurs.</returns>
-    private string DecryptData(string encryptedData)
-    {
-        try
-        {
-            LogToFile("Entering DecryptData method.", "DEBUG");
-            if (string.IsNullOrWhiteSpace(encryptedData))
-            {
-                LogToFile("Encrypted data is null or empty.", "WARN");
-                return null;
-            }
-
-            // Convert the base64 string to byte array
-            byte[] encryptedDataBytes = Convert.FromBase64String(encryptedData);
-            // Decrypt the data using ProtectedData with user scope
-            byte[] decryptedData = ProtectedData.Unprotect(encryptedDataBytes, null, DataProtectionScope.CurrentUser);
-            // Convert the decrypted data to a string
-            string data = Encoding.UTF8.GetString(decryptedData);
-            LogToFile("Data decrypted successfully.", "INFO");
-            LogToFile("Exiting DecryptData method.", "DEBUG");
-            return data;
-        }
-        catch (Exception ex)
-        {
-            LogToFile($"An error occurred in DecryptData: {ex.Message}", "ERROR");
-            return null;
         }
     }
 }
